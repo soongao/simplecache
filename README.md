@@ -38,6 +38,7 @@ go run ./cmd/api/api.go # 启动frontend api服务
 # key = Tom/Jack/Sam 用本地数据模拟数据库
 go run ./cmd/peerserver/peerserver.go -port {port} # 启动远端
 # port = 8001/8002/8003 模拟三个远端
+curl --location 'http://localhost:9999/api?key={key}'
 ```
 
 ## 学习笔记
