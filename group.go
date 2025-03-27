@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 // A Getter loads data for a key.
@@ -73,7 +74,7 @@ func GetGroup(name string) *Group {
 }
 
 // Get value for a key from cache
-func (g *Group) Get(key string) (ByteView, error) {
+func (g *Group) Get(key string, expire time.Time) (ByteView, error) {
 	if key == "" {
 		return ByteView{}, fmt.Errorf("key is required")
 	}
@@ -84,10 +85,10 @@ func (g *Group) Get(key string) (ByteView, error) {
 	}
 
 	// 缓存未命中
-	return g.load(key)
+	return g.load(key, expire)
 }
 
-func (g *Group) load(key string) (value ByteView, err error) {
+func (g *Group) load(key string, expire time.Time) (value ByteView, err error) {
 	// each key is only fetched once (either locally or remotely)
 	// regardless of the number of concurrent callers.
 	viewi, err := g.loader.Do(key, func() (interface{}, error) {
@@ -100,7 +101,7 @@ func (g *Group) load(key string) (value ByteView, err error) {
 			}
 		}
 
-		return g.getLocally(key)
+		return g.getLocally(key, expire)
 	})
 
 	if err == nil {
@@ -110,7 +111,7 @@ func (g *Group) load(key string) (value ByteView, err error) {
 }
 
 // 从Getter中Get(key)
-func (g *Group) getLocally(key string) (ByteView, error) {
+func (g *Group) getLocally(key string, expire time.Time) (ByteView, error) {
 	bytes, err := g.getter.Get(key)
 	if err != nil {
 		return ByteView{}, err
@@ -118,12 +119,12 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 
 	value := ByteView{b: cloneBytes(bytes)}
 	// 添加到cache中
-	g.populateCache(key, value)
+	g.populateCache(key, value, expire)
 	return value, nil
 }
 
-func (g *Group) populateCache(key string, value ByteView) {
-	g.mainCache.add(key, value)
+func (g *Group) populateCache(key string, value ByteView, expire time.Time) {
+	g.mainCache.add(key, value, expire)
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {

@@ -8,8 +8,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -49,7 +51,19 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-
+	expire := r.URL.Query().Get("expire")
+	var expireTime time.Time
+	if expire == "" {
+		expireTime = time.Time(time.Unix(0, 0))
+	} else {
+		ns, err := strconv.Atoi(expire)
+		if err != nil {
+			http.Error(w, "expire wrong type "+expire, http.StatusNotFound)
+			return
+		}
+		expireTime = time.Now()
+		expireTime.Add(time.Second * time.Duration(ns))
+	}
 	groupName := parts[0]
 	key := parts[1]
 
@@ -59,7 +73,7 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := group.Get(key)
+	view, err := group.Get(key, expireTime)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

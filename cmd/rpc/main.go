@@ -2,9 +2,11 @@ package main
 
 import (
 	"dcache"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 var db = map[string]string{
@@ -24,11 +26,19 @@ func createGroup() *dcache.Group {
 		}))
 }
 
-func startAPIServer(apiAddr string, d *dcache.Group) {
+func startCacheServerGrpc(addr string, addrs []string, g *dcache.Group) {
+	peers := dcache.NewGrpcPool(addr)
+	peers.Set(addrs...)
+	g.RegisterPeers(peers)
+	log.Println("cache is running at", addr)
+	peers.Run()
+}
+
+func startAPIServer(apiAddr string, g *dcache.Group) {
 	http.Handle("/api", http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			key := r.URL.Query().Get("key")
-			view, err := d.Get(key)
+			view, err := g.Get(key, time.Time(time.Unix(0, 0)))
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -43,13 +53,27 @@ func startAPIServer(apiAddr string, d *dcache.Group) {
 }
 
 func main() {
-	// singleflight.Group
-	apiAddr := "http://localhost:9999"
-	group := createGroup()
-	// 假设缓存服务器地址
-	peers := dcache.NewHTTPPool("http://localhost:9999")
-	peers.Set("http://localhost:8001", "http://localhost:8002", "http://localhost:8003")
-	group.RegisterPeers(peers)
+	var port int
+	var api bool
+	flag.IntVar(&port, "port", 8001, "cache server port")
+	flag.BoolVar(&api, "api", false, "Start a api server?")
+	flag.Parse()
 
-	startAPIServer(apiAddr, group)
+	apiAddr := "http://localhost:9999"
+	addrMap := map[int]string{
+		8001: ":8001",
+		8002: ":8002",
+		8003: ":8003",
+	}
+
+	var addrs []string
+	for _, v := range addrMap {
+		addrs = append(addrs, v)
+	}
+
+	g := createGroup()
+	if api {
+		go startAPIServer(apiAddr, g)
+	}
+	startCacheServerGrpc(addrMap[port], addrs, g)
 }

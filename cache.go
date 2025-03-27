@@ -3,6 +3,7 @@ package dcache
 import (
 	"dcache/lru"
 	"sync"
+	"time"
 )
 
 type cache struct {
@@ -11,13 +12,13 @@ type cache struct {
 	cacheBytes int64
 }
 
-func (c *cache) add(key string, value ByteView) {
+func (c *cache) add(key string, value ByteView, expire time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.lru == nil {
 		c.lru = lru.New(c.cacheBytes, nil) // Lazy Initialization
 	}
-	c.lru.Add(key, value)
+	c.lru.Add(key, value, expire)
 }
 
 func (c *cache) get(key string) (value ByteView, ok bool) {
